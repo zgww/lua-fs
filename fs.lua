@@ -62,10 +62,10 @@ function m.is_dir(path)
 end
 
 function m.dir(path)
-	local iter = lfs.dir(path)
+	local iter, ud = lfs.dir(path)
 	return function ()
 		while true do
-			local fname = iter()
+			local fname = iter(ud)
 
 			if not fname then return nil end
 
@@ -106,35 +106,32 @@ end
 
 m.open = io.open
 m.close = io.close
-m.read = io.read
-m.write = io.write
 m.remove = os.remove
 m.rename = os.rename
-m.exec = os.execute
+m.exec = os.execute --只执行，返回成功，exit, signal(0 defa)
+
+--这是可以取得命令结果的
+--mode cant be nil
+function m.pexec(cmd, mode)
+	local t = io.popen(cmd)
+	local a = t:read('a')
+	t:close()
+	return a
+end
 
 m.mkdir = lfs.mkdir
 m.rmdir = lfs.rmdir
-m.dir = lfs.dir
 
-
-function m.mkdirs(mkdir, exist, path)
-	path = string.gsub(path, '[\\/]+', '/')
-	local parts = sys.str.split(path, '/')
-
-	local dir = nil
-	for _, part in ipairs(parts) do
-		if dir then
-			dir = dir .. '/' .. part
-		else
-			dir = part
-		end
-
-		if not exist(dir) then
-			print('mkdir ', dir)
-			mkdir(dir)
-		end
+function m.read(f, mode)
+	return f:read(mode)
+end
+function m.write(f, ...)
+	local succ, err = f:write(...)
+	if not succ then
+		error(string.format('write failed. err : %s', err))
 	end
 end
+
 function m.mkdirs(path)
 	path = string.gsub(path, '[\\/]+', '/')
 
@@ -169,4 +166,21 @@ function m.rmdirs_force(path)
 		end
 	end
 	m.rmdir(path)
+end
+
+function m.copy(fpath, tpath)
+	local ff = m.open(fpath, 'r')
+	assert(ff, 'copy failed. no fpath ' .. fpath)
+
+	local tf = m.open(tpath, 'w+')
+	assert(tf, 'copy failed. no tpath ' .. tpath)
+
+	while true do
+		local s = m.read(ff, 20480) --一次读取20k
+		if not s then break end
+
+		m.write(tf, s)
+	end
+	m.close(ff)
+	m.close(tf)
 end
